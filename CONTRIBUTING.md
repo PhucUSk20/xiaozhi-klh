@@ -9,8 +9,6 @@ Team members can also contribute in the private
 project. Create a feature branch or fork there and open a merge request targeting
 `klh-dev`. GitLab requires group or project access. Public GitHub contributions
 continue to use pull requests as described below.
-The GitLab project is currently awaiting its first push by a Maintainer; until
-then, use GitHub for source and contributions.
 
 1. Fork this repository and create a branch from `klh-dev`.
 2. Read [AGENTS.md](AGENTS.md), [the KLH guide](docs/klh-fork.md) and the closest
