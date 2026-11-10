@@ -3,6 +3,187 @@
     "target": "esp32s3",
     "builds": [
         {
+            "name": "bread-compact-wifi-sh1106-ili9341-320x240-sd-cs38",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_USE_CS38_RST40_DC41=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9341_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=y"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-ili9341-320x240-sd",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9341_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=y"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-ili9341-320x240",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9341_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-ili9341-320x240-sd",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9341_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SSD1306_128X32=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=y"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-ili9341-320x240",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9341_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SSD1306_128X32=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-ili9486-sd-test",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=y",
+                "CONFIG_BREAD_COMPACT_WIFI_ILI9486_SD_TEST=y",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-st7789-320x240-sd",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=y"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-st7789-320x240",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-st7789-320x240",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SSD1306_128X32=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-ili9486-480x320-sd",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=y"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-ili9486-480x320",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-ili9486-480x320",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_ST7735_160X128=n",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n",
+                "CONFIG_OLED_SSD1306_128X32=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-tft-sd",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD=y",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-tft-160x128",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-tft-128x160",
+            "sdkconfig_append": [
+                "CONFIG_BREAD_COMPACT_WIFI_TFT_128X160=y",
+                "CONFIG_BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS=n"
+            ]
+        },
+        {
             "name": "bread-compact-wifi",
             "sdkconfig_append": [
                 "CONFIG_OLED_SSD1306_128X32=y"
@@ -12,6 +193,13 @@
             "name": "bread-compact-wifi-128x64",
             "sdkconfig_append": [
                 "CONFIG_OLED_SSD1306_128X64=y"
+            ]
+        },
+        {
+            "name": "bread-compact-wifi-sh1106-emoji",
+            "sdkconfig_append": [
+                "CONFIG_OLED_SH1106_128X64=y",
+                "CONFIG_BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY=y"
             ]
         }
     ]

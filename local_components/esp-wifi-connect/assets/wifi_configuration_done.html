@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>KLeaderBit connected</title>
+  <style>
+    :root{color-scheme:dark}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#081525;color:#f4f8fc;font:16px system-ui;padding:20px}
+    .card{max-width:460px;text-align:center;background:#10233b;border:1px solid #27425f;border-radius:20px;padding:34px;box-shadow:0 22px 60px #0006}
+    .ok{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;margin:auto;background:#12b981;font-size:34px;font-weight:900}
+    h1{margin:20px 0 10px}
+    p{color:#a9bed2;line-height:1.55}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="ok">&#10003;</div>
+    <h1>Wi-Fi saved</h1>
+    <p>KLeaderBit is connecting to your network. You can close this page; the animated emoji returns when the connection succeeds.</p>
+  </main>
+  <script>
+    fetch('/exit', {method: 'POST', cache: 'no-store'}).catch(() => {});
+  </script>
+</body>
+</html>

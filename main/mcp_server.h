@@ -325,6 +325,10 @@ public:
     void AddUserOnlyTool(const std::string& name, const std::string& description, const PropertyList& properties, std::function<ReturnValue(const PropertyList&)> callback);
     void ParseMessage(const cJSON* json);
     void ParseMessage(const std::string& message);
+    // Runs on the application task after tool/argument validation, before execution.
+    void SetBeforeToolCall(std::function<void(const std::string&)> callback) {
+        before_tool_call_ = std::move(callback);
+    }
 
 private:
     McpServer();
@@ -339,6 +343,7 @@ private:
     void DoToolCall(int id, const std::string& tool_name, const cJSON* tool_arguments);
 
     std::vector<McpTool*> tools_;
+    std::function<void(const std::string&)> before_tool_call_;
 };
 
 #endif // MCP_SERVER_H

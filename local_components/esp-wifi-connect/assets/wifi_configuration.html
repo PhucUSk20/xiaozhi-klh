@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#081525">
+  <title>KLeaderBit Education Wi-Fi Setup</title>
+  <style>
+    :root{color-scheme:dark;--navy:#081525;--panel:#10233b;--line:#27425f;--cyan:#27c2f3;--blue:#2367df;--text:#f4f8fc;--muted:#a9bed2;--danger:#ff6b78}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#124f70 0,transparent 42%),var(--navy);font:16px system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);padding:24px 16px}
+    .shell{width:min(100%,520px);margin:auto}
+    .brand{display:flex;gap:13px;align-items:center;margin-bottom:22px}
+    .logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(145deg,var(--cyan),var(--blue));display:grid;place-items:center;font-weight:900;box-shadow:0 10px 30px #0006}
+    .brand strong{display:block;font-size:21px}
+    .brand span{color:var(--muted);font-size:13px}
+    .card{background:#10233be8;border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 22px 60px #0006}
+    h1{font-size:25px;margin:0 0 7px}
+    p{color:var(--muted);line-height:1.5;margin:0 0 20px}
+    .list{display:grid;gap:8px;max-height:260px;overflow:auto;margin:12px 0 18px}
+    .network{width:100%;display:flex;justify-content:space-between;gap:12px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#0b1a2c;color:var(--text);text-align:left;cursor:pointer}
+    .network:hover,.network.selected{border-color:var(--cyan);background:#12324a}
+    .network small{color:var(--muted)}
+    label{display:block;color:var(--muted);font-size:13px;margin:14px 0 7px}
+    input{width:100%;padding:13px 14px;border-radius:11px;border:1px solid var(--line);background:#081525;color:var(--text);font-size:16px;outline:none}
+    input:focus{border-color:var(--cyan)}
+    button.primary{width:100%;margin-top:18px;padding:14px;border:0;border-radius:12px;background:linear-gradient(100deg,var(--blue),var(--cyan));color:white;font-weight:800;font-size:16px;cursor:pointer}
+    button:disabled{opacity:.5;cursor:wait}
+    .status{min-height:24px;margin-top:14px;color:var(--muted);font-size:14px}
+    .error{color:var(--danger)}
+    .refresh{background:none;border:0;color:var(--cyan);cursor:pointer;float:right;font-weight:700}
+    .control{display:block;margin-top:14px;padding:13px 14px;border:1px solid #386484;border-radius:12px;background:#0b1a2c;color:var(--text);text-align:center;text-decoration:none;font-weight:800}
+    .control:hover{border-color:var(--cyan);background:#12324a}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="brand">
+      <div class="logo">KL</div>
+      <div><strong>KLeaderBit Education</strong><span>Board Wi-Fi provisioning</span></div>
+    </header>
+    <section class="card">
+      <button class="refresh" id="refresh" type="button">Scan again</button>
+      <h1>Connect your board</h1>
+      <p>Select a 2.4 GHz Wi-Fi network and enter its password.</p>
+      <a class="control" href="http://192.168.4.1:81/">Điều khiển Robot · Robot Control</a>
+      <div id="networks" class="list"><div class="status">Scanning nearby networks...</div></div>
+      <form id="form">
+        <label for="ssid">Wi-Fi name (SSID)</label>
+        <input id="ssid" maxlength="32" required autocomplete="off">
+        <label for="password">Password</label>
+        <input id="password" type="password" maxlength="63" autocomplete="current-password">
+        <button class="primary" id="connect" type="submit">Connect KLeaderBit</button>
+      </form>
+      <div id="status" class="status" role="status"></div>
+    </section>
+  </main>
+  <script>
+    const networks = document.querySelector('#networks');
+    const ssid = document.querySelector('#ssid');
+    const status = document.querySelector('#status');
+    const connect = document.querySelector('#connect');
+    const refresh = document.querySelector('#refresh');
+
+    function setStatus(text, error = false) {
+      status.textContent = text;
+      status.className = 'status' + (error ? ' error' : '');
+    }
+
+    async function scan() {
+      refresh.disabled = true;
+      refresh.textContent = 'Scanning...';
+      networks.innerHTML = '<div class="status">Scanning nearby networks...</div>';
+      try {
+        const response = await fetch('/scan', {cache: 'no-store'});
+        if (!response.ok) throw new Error('Scan failed');
+        const data = await response.json();
+        networks.textContent = '';
+        const strongestBySsid = new Map();
+        (data.aps || []).forEach(accessPoint => {
+          if (!accessPoint.ssid) return;
+          const current = strongestBySsid.get(accessPoint.ssid);
+          if (!current || accessPoint.rssi > current.rssi) strongestBySsid.set(accessPoint.ssid, accessPoint);
+        });
+        const accessPoints = [...strongestBySsid.values()].sort((a, b) => b.rssi - a.rssi);
+        if (!accessPoints.length) {
+          networks.innerHTML = '<div class="status">No networks found. Select Scan again.</div>';
+          return;
+        }
+        accessPoints.forEach(accessPoint => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'network';
+          const name = document.createElement('span');
+          name.textContent = accessPoint.ssid || '(Hidden network)';
+          const signal = document.createElement('small');
+          signal.textContent = `${accessPoint.rssi} dBm`;
+          button.append(name, signal);
+          button.onclick = () => {
+            document.querySelectorAll('.network').forEach(item => item.classList.remove('selected'));
+            button.classList.add('selected');
+            ssid.value = accessPoint.ssid || '';
+          };
+          networks.append(button);
+        });
+      } catch (error) {
+        networks.innerHTML = '<div class="status error">Scan failed. Please try again.</div>';
+      } finally {
+        refresh.disabled = false;
+        refresh.textContent = 'Scan again';
+      }
+    }
+
+    refresh.onclick = scan;
+    document.querySelector('#form').onsubmit = async event => {
+      event.preventDefault();
+      connect.disabled = true;
+      setStatus('Connecting... keep this page open.');
+      try {
+        const result = await fetch('/submit', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ssid: ssid.value, password: document.querySelector('#password').value})
+        }).then(response => response.json());
+        if (!result.success) {
+          throw new Error(result.error || 'Connection failed');
+        }
+        location.href = '/done.html';
+      } catch (error) {
+        setStatus(error.message || 'Connection failed.', true);
+        connect.disabled = false;
+      }
+    };
+    scan();
+  </script>
+</body>
+</html>

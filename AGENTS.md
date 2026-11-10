@@ -74,6 +74,10 @@ The build script changes local `sdkconfig` and build state. Do not assume the bu
 
 ## Validation
 
+- User preference: do not run Origin firmware builds unless explicitly requested.
+  Edit source and use appropriate static checks; the user builds this firmware.
+  Report clearly that the Origin changes were not built or tested on hardware.
+
 - Board-only change: build affected variants and smoke-test changed hardware.
 - Core, common-board, audio, protocol, display, dependency, Kconfig, or CMake change: run host tests and build representative affected chip/network paths.
 - Protocol changes: verify WebSocket and MQTT/UDP when shared behavior changes.

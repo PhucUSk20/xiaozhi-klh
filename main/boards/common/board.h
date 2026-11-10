@@ -13,6 +13,7 @@
 #include "backlight.h"
 #include "camera.h"
 #include "assets.h"
+#include "device_state.h"
 
 /**
  * Network events for unified callback
@@ -76,8 +77,15 @@ public:
     virtual NetworkInterface* GetNetwork() = 0;
     virtual void StartNetwork() = 0;
     virtual void SetNetworkEventCallback(NetworkEventCallback callback) { (void)callback; }
+    // Called on the application task before processing the wake acknowledgement/listening.
+    virtual void OnWakeWordDetected(const std::string& wake_word) { (void)wake_word; }
+    // Called on the application task after entering idle and re-arming voice input.
+    virtual void OnSessionIdle() {}
+    // Application-task notifications for optional secondary displays.
+    virtual void OnDeviceStateChanged(DeviceState state) { (void)state; }
+    virtual void OnEmotionChanged(const char* emotion) { (void)emotion; }
     virtual const char* GetNetworkStateIcon() = 0;
-    virtual bool GetBatteryLevel(int &level, bool& charging, bool& discharging);
+    virtual bool GetBatteryLevel(int& level, bool& charging, bool& discharging);
     virtual std::string GetSystemInfoJson();
     virtual void SetPowerSaveLevel(PowerSaveLevel level) = 0;
     virtual std::string GetBoardJson() = 0;

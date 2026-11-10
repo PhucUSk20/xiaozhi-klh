@@ -684,6 +684,216 @@ choice ESP32_S3_LCD_EV_BOARD_VERSION
         bool "Espressif ESP32-S3-LCD-EV-Board-MB v1.5"
 endchoice
 
+menuconfig BREAD_COMPACT_WIFI_TFT_128X160
+    bool "Add secondary SPI TFT for images"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI
+    select LV_USE_LODEPNG
+    select LV_USE_LINE
+    default n
+    help
+        Add a secondary SPI TFT; select its controller and resolution below.
+        The selected OLED remains the primary assistant/emoji display.
+        Legacy microphone pins 12/13/14 require TFT pins CS38/RST40/DC41.
+        Connect the display backlight separately; no backlight GPIO is assigned.
+
+if BREAD_COMPACT_WIFI_TFT_128X160
+
+config BREAD_COMPACT_WIFI_TFT_USE_CS38_RST40_DC41
+    bool "Use TFT pins CS38/RST40/DC41 (off: CS12/RST14/DC13)"
+    depends on IDF_TARGET_ESP32S3
+    default n
+    help
+        Enable for TFT wiring CS=GPIO38, RST=GPIO40, DC=GPIO41.
+        Disable to retain the original CS=GPIO12, RST=GPIO14, DC=GPIO13.
+        Both configurations use MOSI=GPIO15 and SCK=GPIO2.
+        For release builds, use a variant with a distinct board name.
+
+choice BREAD_COMPACT_WIFI_TFT_PANEL
+    prompt "Secondary TFT controller / resolution"
+    depends on BREAD_COMPACT_WIFI_TFT_128X160
+    default BREAD_COMPACT_WIFI_TFT_ST7735_160X128
+
+config BREAD_COMPACT_WIFI_TFT_ST7735_160X128
+    bool "ST7735 1.8 inch, 160x128 landscape (existing wiring)"
+
+config BREAD_COMPACT_WIFI_TFT_ST7789_320X240
+    bool "ST7789 2 inch, 320x240 landscape"
+    help
+        Native 240x320 panel rotated to landscape, using the ESP-IDF ST7789 driver.
+        Same SPI pins as the 1.8 inch display; connect backlight separately.
+        Existing screen tools and SD GIF emoji use the selected resolution.
+
+config BREAD_COMPACT_WIFI_TFT_ILI9341_320X240
+    bool "ILI9341 3.2 inch SPI V2.0, 320x240 landscape"
+    help
+        Native 240x320 panel rotated to landscape with the ILI9341 driver.
+        Uses RGB565 over standard SPI, with the existing secondary TFT pins.
+        Select this for the 3.2 inch ILI9341 module previously mistaken for ILI9486.
+        Connect the backlight separately; touch and the module's SD socket are not used.
+
+config BREAD_COMPACT_WIFI_TFT_ILI9486_480X320
+    bool "ILI9486 3.5 inch, 480x320 landscape"
+    depends on IDF_TARGET_ESP32S3 && SPIRAM
+    help
+        Uses Robot-compatible SPI framing with RGB666 output, as confirmed
+        by the LCD diagnostic. LVGL RGB565 pixels are converted by panel IO.
+        Same SPI pins as the 1.8 inch display; connect backlight separately.
+        Enable SD card GIF support below for animated image emoji.
+endchoice
+
+config BREAD_COMPACT_WIFI_TFT_ST7789_INVERT_COLOR
+    bool "ST7789 display color inversion (usually enabled for IPS)"
+    depends on BREAD_COMPACT_WIFI_TFT_ST7789_320X240
+    default y
+    help
+        Matches the ST7789 IPS initialization used by Xiaozhi-Robot.
+        Disable for a module requiring non-inverted display output.
+
+config BREAD_COMPACT_WIFI_TFT_ILI9341_INVERT_COLOR
+    bool "ILI9341 display color inversion"
+    depends on BREAD_COMPACT_WIFI_TFT_ILI9341_320X240
+    default n
+    help
+        Enable if the module requires inverted output (for example an IPS panel).
+        Verify color and orientation on hardware; start with TFT SPI clock at 10 MHz.
+
+config BREAD_COMPACT_WIFI_TFT_SPI_MHZ
+    int "Secondary TFT SPI clock (MHz)"
+    depends on BREAD_COMPACT_WIFI_TFT_128X160
+    range 1 40
+    default 10
+    help
+        SPI transfer clock, not panel refresh rate. Start at 10 MHz;
+        higher values require checking the panel and wiring on hardware.
+
+menuconfig BREAD_COMPACT_WIFI_TFT_SDCARD
+    bool "Read TFT GIF files from SDMMC (CLK10/CMD11/D0-16)"
+    depends on BREAD_COMPACT_WIFI_TFT_128X160 && IDF_TARGET_ESP32S3
+    select LV_USE_GIF
+    default n
+    help
+        Read GIFs from a FAT32 card mounted at /sdcard.
+        SDMMC runs in 1-bit mode at up to 40 MHz, independently of TFT SPI.
+        The GIF directory and transfer clock ceiling are configured below. Never format
+        by firmware. SH1106 emoji rendering remains unchanged.
+
+if BREAD_COMPACT_WIFI_TFT_SDCARD
+
+config BREAD_COMPACT_WIFI_TFT_GIF_DIRECTORY
+    string "Secondary TFT GIF directory relative to SD root"
+    depends on BREAD_COMPACT_WIFI_TFT_SDCARD
+    default "Kira-Emotes/Kira-Emotes/gif"
+    help
+        Accepts / or backslash as separators; firmware normalizes them to /.
+        No drive letter, leading/trailing separator, empty, . or .. components.
+        Spaces are supported, for example Kira-Emotes 2/Kira-Emotes/gif.
+        Keep the 25 named GIF files in this folder. Maximum path length: 128 bytes.
+        This selects files; it does not recolor their opaque background pixels.
+
+config BREAD_COMPACT_WIFI_TFT_SD_MHZ
+    int "Secondary TFT SDMMC transfer clock ceiling (MHz)"
+    depends on BREAD_COMPACT_WIFI_TFT_SDCARD
+    range 10 40
+    default 40
+    help
+        1-bit SDMMC. Typical values: 10, 20, 40 MHz. Transient mount failures
+        retry with ceilings no higher than this setting, then at most 20/10 MHz.
+        This ceiling does not change the driver's identification clock.
+
+menuconfig BREAD_COMPACT_WIFI_ILI9486_SD_TEST
+    bool "Run standalone ILI9486 LCD + SD diagnostic at boot"
+    depends on BREAD_COMPACT_WIFI_TFT_ILI9486_480X320 && BREAD_COMPACT_WIFI_TFT_SDCARD
+    default n
+    help
+        Run only raw SPI color/grid tests and an SD GIF, bypassing the assistant,
+        audio, Wi-Fi, camera and LVGL display rendering. Uses the confirmed
+        RGB666 format with native 320x480 addressing and software rotation.
+        Turn off this option to restore normal firmware operation.
+
+if BREAD_COMPACT_WIFI_ILI9486_SD_TEST
+
+config BREAD_COMPACT_WIFI_LCD_TEST_SPI_MHZ
+    int "LCD diagnostic SPI clock (MHz)"
+    depends on BREAD_COMPACT_WIFI_ILI9486_SD_TEST
+    range 1 20
+    default 5
+
+config BREAD_COMPACT_WIFI_LCD_TEST_GIF
+    string "LCD diagnostic GIF filename in configured SD directory"
+    depends on BREAD_COMPACT_WIFI_ILI9486_SD_TEST
+    default "neutral.gif"
+
+endif # BREAD_COMPACT_WIFI_ILI9486_SD_TEST
+
+endif # BREAD_COMPACT_WIFI_TFT_SDCARD
+
+menuconfig BREAD_COMPACT_WIFI_LCD_IMAGE_TEST
+    bool "Run LCD EduHub image slideshow at boot (ST7789 / ILI9341)"
+    depends on (BREAD_COMPACT_WIFI_TFT_ST7789_320X240 || BREAD_COMPACT_WIFI_TFT_ILI9341_320X240) && !BREAD_COMPACT_WIFI_TFT_SDCARD
+    depends on !BREAD_COMPACT_WIFI_TFT_WORD_IMAGES_SD
+    default n
+    help
+        Start a background slideshow after the normal firmware connects to Wi-Fi.
+        Downloads five built-in public test illustrations directly from EduHub.
+        No account, Robot token, lesson ID or image URL configuration is needed.
+        Uses the existing TFT PNG/JPEG downloader. Assistant and Wi-Fi setup
+        remain active; TFT MCP tools are disabled to keep the slideshow in control.
+        Disable SD support and select HTTP/S3 vocabulary images for this test.
+
+if BREAD_COMPACT_WIFI_LCD_IMAGE_TEST
+
+config BREAD_COMPACT_WIFI_LCD_IMAGE_TEST_SPI_MHZ
+    int "LCD image diagnostic SPI clock (MHz)"
+    range 1 20
+    default 10
+    help
+        Overrides the normal TFT SPI clock while slideshow diagnostic mode is enabled.
+        Start at 10 MHz when investigating an all-white display.
+
+config BREAD_COMPACT_WIFI_LCD_IMAGE_TEST_COLORS
+    bool "Test direct LCD solid colors and LVGL text before slideshow"
+    default y
+    help
+        Before LVGL starts, send red, green, blue, white and black directly to
+        panel RAM using synchronous SPI. Then show LCD TEST through LVGL.
+        Solid colors prove the panel accepts writes independently of Wi-Fi,
+        JPEG decoding and LVGL. White throughout requires checking wiring/init.
+
+config BREAD_COMPACT_WIFI_LCD_IMAGE_TEST_COUNT
+    int "Number of public test images"
+    range 1 5
+    default 5
+    help
+        Show the first N images from the built-in EduHub public sample list,
+        then loop back to the first. No authenticated API calls are made.
+
+config BREAD_COMPACT_WIFI_LCD_IMAGE_TEST_SECONDS
+    int "Display time per image after loading (seconds)"
+    range 1 3600
+    default 10
+
+endif # BREAD_COMPACT_WIFI_LCD_IMAGE_TEST
+
+choice BREAD_COMPACT_WIFI_TFT_WORD_IMAGE_SOURCE
+    prompt "Vocabulary image source"
+    depends on BREAD_COMPACT_WIFI_TFT_128X160
+    default BREAD_COMPACT_WIFI_TFT_WORD_IMAGES_HTTP
+
+config BREAD_COMPACT_WIFI_TFT_WORD_IMAGES_HTTP
+    bool "HTTP/S3 (download images from EduHub)"
+
+config BREAD_COMPACT_WIFI_TFT_WORD_IMAGES_SD
+    bool "SD card (exported word-images ZIP, no HTTP fallback)"
+    depends on BREAD_COMPACT_WIFI_TFT_SDCARD
+    help
+        Extract the EduHub ZIP at SD root: /manifest.json and /word-images/*.jpg.
+        Advertises self.screen.show_word_image(lessonId,key) to display directly
+        from SD, avoiding english_get_word_image and image HTTP downloads.
+        Missing/corrupt files report an error; no automatic HTTP fallback.
+endchoice
+
+endif # BREAD_COMPACT_WIFI_TFT_128X160
+
 choice DISPLAY_OLED_TYPE
     depends on BOARD_TYPE_BREAD_COMPACT_WIFI || BOARD_TYPE_BREAD_COMPACT_ML307 || BOARD_TYPE_BREAD_COMPACT_NT26 || BOARD_TYPE_BREAD_COMPACT_ESP32 || BOARD_TYPE_HU_087
     prompt "OLED Type"
@@ -697,6 +907,251 @@ choice DISPLAY_OLED_TYPE
     config OLED_SH1106_128X64
         bool "SH1106 128*64"
 endchoice
+
+config BREAD_COMPACT_WIFI_SH1106_EMOJI_ONLY
+    bool "Show full-screen animated emoji only"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI && OLED_SH1106_128X64
+    default y if BREAD_COMPACT_WIFI_TFT_128X160
+    default n
+    help
+        Use the complete 128x64 SH1106 area for a monochrome animated face.
+        Status text, notifications, chat text, and status-bar icons are hidden.
+        Disable this option to restore the standard OLED user interface.
+
+config BREAD_COMPACT_WIFI_HUB_MUSIC_TEST
+    bool "Enable Robot Hub music test (search/play)"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI && IDF_TARGET_ESP32S3
+    default n
+    help
+        Enable self.music.play_url and self.music.stop for testing private
+        Robot Hub MP3 playback. The assistant uses the server-side tools
+        music__search_music and music__play_music through your connected MCP
+        endpoint, then passes the returned stream URL to self.music.play_url.
+        Once after startup reaches idle, send an embedded spoken music request
+        to the existing voice host. The host uses the connected Robot Hub MCP
+        tools music__search_music and music__play_music, then invokes the device
+        tool self.music.play_url. No extra robot credential is required here.
+        Requires the Robot Hub music tools to be enabled on the host endpoint.
+        This tests the real host/ASR/MCP flow; tool selection depends on the
+        assistant prompt. Disabling this removes music tools and the boot test.
+
+config BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS
+    bool "Use legacy microphone pins (GPIO14/GPIO13/GPIO12)"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI
+    depends on !BREAD_COMPACT_WIFI_TFT_128X160 || BREAD_COMPACT_WIFI_TFT_USE_CS38_RST40_DC41
+    default n
+    help
+        Select the legacy microphone connection: BCLK/SCK=GPIO14,
+        DATA_OUT/DIN=GPIO13, and WS=GPIO12.
+        With the secondary TFT enabled, first select TFT pins CS38/RST40/DC41
+        to avoid conflicts with the microphone pins.
+
+        Leave this disabled for the current SPH0645 microphone schematic:
+        BCLK/SCK=GPIO47, DATA_OUT/DIN=GPIO45, and WS=GPIO48. GPIO47 and
+        GPIO48 are shared with the speaker through one full-duplex I2S bus.
+
+config BREAD_COMPACT_WIFI_SPH0645_PCM_SHIFT
+    int "SPH0645 microphone 32-bit to 16-bit shift"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI && !BREAD_COMPACT_WIFI_USE_LEGACY_MIC_PINS
+    range 12 20
+    default 16
+    help
+        Number of bits removed when converting the left-aligned SPH0645 sample
+        from the 32-bit I2S slot to signed 16-bit PCM for AFE/WakeNet.
+
+        Use 16 for the native 24-bit microphone data. Decrease this value only
+        if the microphone is too quiet. Increase it if the PCM clipping counter
+        is still high. A permanently saturated signal prevents wake-word
+        detection.
+
+choice BREAD_COMPACT_WIFI_BUTTON_A_ACTION
+    prompt "Button A short-press action"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI
+    default BREAD_COMPACT_WIFI_BUTTON_A_GAME
+
+config BREAD_COMPACT_WIFI_BUTTON_A_GAME
+    bool "Cycle idle GIF / start Rock Paper Scissors (existing behavior)"
+
+config BREAD_COMPACT_WIFI_BUTTON_A_VOLUME_UP
+    bool "Increase speaker volume"
+
+config BREAD_COMPACT_WIFI_BUTTON_A_VOLUME_DOWN
+    bool "Decrease speaker volume"
+
+endchoice
+
+choice BREAD_COMPACT_WIFI_BUTTON_B_ACTION
+    prompt "Button B short-press action"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI
+    default BREAD_COMPACT_WIFI_BUTTON_B_SHOW_QR
+    help
+        Select QR code, conversation or speaker volume adjustment.
+
+config BREAD_COMPACT_WIFI_BUTTON_B_SHOW_QR
+    bool "Show local-control QR code"
+
+config BREAD_COMPACT_WIFI_BUTTON_B_WAKE_WORD
+    bool "Start conversation (local wake-word event)"
+
+config BREAD_COMPACT_WIFI_BUTTON_B_VOLUME_UP
+    bool "Increase speaker volume"
+
+config BREAD_COMPACT_WIFI_BUTTON_B_VOLUME_DOWN
+    bool "Decrease speaker volume"
+
+endchoice
+
+config BREAD_COMPACT_WIFI_BUTTON_VOLUME_STEP
+    int "Button volume adjustment step (percentage points)"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI
+    range 1 30
+    default 10
+    help
+        Used by either button assigned to volume up/down. Volume is clamped to 0..100.
+        Button A long press still stops Rock Paper Scissors.
+
+config BREAD_COMPACT_WIFI_BUTTON_B_WAKE_WORD_TEXT
+    string "Button B wake-word text"
+    depends on BREAD_COMPACT_WIFI_BUTTON_B_WAKE_WORD
+    default "Hey Kira"
+    help
+        Wake-word text reported to the application/server when Button B is
+        configured to start a conversation.
+
+menu "Bread Compact WiFi wheel movement"
+    depends on BOARD_TYPE_BREAD_COMPACT_WIFI
+
+config BREAD_COMPACT_WIFI_MOVEMENT_STOP_PULSE_US
+    int "Stop both wheels: PCA9685 PWM11/PWM12 pulse (microseconds)"
+    range 500 3000
+    default 1700
+    help
+        Neutral PWM pulse used to stop the continuous-rotation servos on
+        PCA9685 channels 11 and 12. Adjust this value if either wheel creeps
+        while stopped. Typical servos stop near 1500 us; this robot is
+        calibrated to 1700 us by default.
+
+config BREAD_COMPACT_WIFI_FORWARD_LEFT_WHEEL_PULSE_US
+    int "Move forward: LEFT wheel / PCA9685 PWM11 pulse (microseconds)"
+    range 500 3000
+    default 1000
+    help
+        PWM pulse for the left continuous-rotation servo on PCA9685 channel 11
+        while the move_forward tool is active.
+
+config BREAD_COMPACT_WIFI_FORWARD_RIGHT_WHEEL_PULSE_US
+    int "Move forward: RIGHT wheel / PCA9685 PWM12 pulse (microseconds)"
+    range 500 3000
+    default 2500
+    help
+        PWM pulse for the right continuous-rotation servo on PCA9685 channel 12
+        while the move_forward tool is active.
+
+config BREAD_COMPACT_WIFI_BACKWARD_LEFT_WHEEL_PULSE_US
+    int "Move backward: LEFT wheel / PCA9685 PWM11 pulse (microseconds)"
+    range 500 3000
+    default 2500
+    help
+        PWM pulse for the left continuous-rotation servo on PCA9685 channel 11
+        while the move_backward tool is active.
+
+config BREAD_COMPACT_WIFI_BACKWARD_RIGHT_WHEEL_PULSE_US
+    int "Move backward: RIGHT wheel / PCA9685 PWM12 pulse (microseconds)"
+    range 500 3000
+    default 1000
+    help
+        PWM pulse for the right continuous-rotation servo on PCA9685 channel 12
+        while the move_backward tool is active.
+
+config BREAD_COMPACT_WIFI_SPIN_LEFT_WHEEL_PULSE_US
+    int "Spin around: LEFT wheel / PCA9685 PWM11 pulse (microseconds)"
+    range 500 3000
+    default 1000
+    help
+        PWM pulse for the left continuous-rotation servo on PCA9685 channel 11
+        while the spin_around tool is active.
+
+config BREAD_COMPACT_WIFI_SPIN_RIGHT_WHEEL_PULSE_US
+    int "Spin around: RIGHT wheel / PCA9685 PWM12 pulse (microseconds)"
+    range 500 3000
+    default 1000
+    help
+        PWM pulse for the right continuous-rotation servo on PCA9685 channel 12
+        while the spin_around tool is active.
+
+config BREAD_COMPACT_WIFI_TURN_LEFT_LEFT_WHEEL_PULSE_US
+    int "Turn left: LEFT wheel / PCA9685 PWM11 pulse (microseconds)"
+    range 500 3000
+    default 1700
+    help
+        PWM pulse for the left continuous-rotation servo on PCA9685 channel 11
+        while the turn_left tool is active. The default stops the inside wheel.
+
+config BREAD_COMPACT_WIFI_TURN_LEFT_RIGHT_WHEEL_PULSE_US
+    int "Turn left: RIGHT wheel / PCA9685 PWM12 pulse (microseconds)"
+    range 500 3000
+    default 2500
+    help
+        PWM pulse for the right continuous-rotation servo on PCA9685 channel 12
+        while the turn_left tool is active.
+
+config BREAD_COMPACT_WIFI_TURN_RIGHT_LEFT_WHEEL_PULSE_US
+    int "Turn right: LEFT wheel / PCA9685 PWM11 pulse (microseconds)"
+    range 500 3000
+    default 500
+    help
+        PWM pulse for the left continuous-rotation servo on PCA9685 channel 11
+        while the turn_right tool is active.
+
+config BREAD_COMPACT_WIFI_TURN_RIGHT_RIGHT_WHEEL_PULSE_US
+    int "Turn right: RIGHT wheel / PCA9685 PWM12 pulse (microseconds)"
+    range 500 3000
+    default 1700
+    help
+        PWM pulse for the right continuous-rotation servo on PCA9685 channel 12
+        while the turn_right tool is active. The default stops the inside wheel.
+
+config BREAD_COMPACT_WIFI_DANCE_CLOCKWISE_LEFT_WHEEL_PULSE_US
+    int "Dance clockwise: LEFT wheel / PCA9685 PWM11 pulse (microseconds)"
+    range 500 3000
+    default 1000
+    help
+        Left-wheel pulse used for the clockwise spin steps of the dance tool.
+        The forward and backward dance steps use the corresponding movement
+        settings above.
+
+config BREAD_COMPACT_WIFI_DANCE_CLOCKWISE_RIGHT_WHEEL_PULSE_US
+    int "Dance clockwise: RIGHT wheel / PCA9685 PWM12 pulse (microseconds)"
+    range 500 3000
+    default 1000
+    help
+        Right-wheel pulse used for the clockwise spin steps of the dance tool.
+
+config BREAD_COMPACT_WIFI_DANCE_COUNTER_LEFT_WHEEL_PULSE_US
+    int "Dance counterclockwise: LEFT wheel / PCA9685 PWM11 pulse (microseconds)"
+    range 500 3000
+    default 2500
+    help
+        Left-wheel pulse used for the counterclockwise spin steps of the dance
+        tool.
+
+config BREAD_COMPACT_WIFI_DANCE_COUNTER_RIGHT_WHEEL_PULSE_US
+    int "Dance counterclockwise: RIGHT wheel / PCA9685 PWM12 pulse (microseconds)"
+    range 500 3000
+    default 2500
+    help
+        Right-wheel pulse used for the counterclockwise spin steps of the dance
+        tool.
+
+config BREAD_COMPACT_WIFI_DANCE_STEP_DURATION_MS
+    int "Dance movement step duration (milliseconds)"
+    range 100 2000
+    default 350
+    help
+        Duration of each dance pose and wheel movement. Lower values make the
+        choreography change direction faster; higher values make it slower.
+
+endmenu
 
 choice DISPLAY_LCD_TYPE
     depends on BOARD_TYPE_BREAD_COMPACT_WIFI_LCD || BOARD_TYPE_BREAD_COMPACT_ESP32_LCD || BOARD_TYPE_WDMOMO_CGC || BOARD_TYPE_BREAD_COMPACT_WIFI_CAM

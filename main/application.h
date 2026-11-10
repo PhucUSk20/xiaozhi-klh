@@ -7,6 +7,8 @@
 #include <esp_timer.h>
 
 #include <string>
+#include <string_view>
+#include <atomic>
 #include <mutex>
 #include <deque>
 #include <memory>
@@ -105,11 +107,17 @@ public:
      */
     void StopListening();
 
+    bool BeginBrowserVoiceInput();
+    bool PushBrowserVoicePcm(const int16_t* samples, size_t sample_count);
+    void EndBrowserVoiceInput();
+    bool IsBrowserVoiceReady() const;
+
     void Reboot();
     void WakeWordInvoke(const std::string& wake_word);
     bool UpgradeFirmware(const std::string& url, const std::string& version = "");
     bool CanEnterSleepMode();
     void SendMcpMessage(const std::string& payload);
+    void SendAudioPrompt(const std::string_view& ogg, const std::string& label);
     void RegisterMcpBroadcastCallback(std::function<void(const std::string&)> callback);
     void SetAecMode(AecMode mode);
     AecMode GetAecMode() const { return aec_mode_; }
@@ -128,6 +136,8 @@ private:
     ~Application();
 
     std::mutex mutex_;
+    std::atomic_bool audio_prompt_active_{false};
+    std::atomic_bool browser_voice_active_{false};
     std::deque<std::function<void()>> main_tasks_;
     std::unique_ptr<Protocol> protocol_;
     EventGroupHandle_t event_group_ = nullptr;
@@ -145,7 +155,9 @@ private:
     bool aborted_ = false;
     bool assets_version_checked_ = false;
     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
-    bool pending_listening_start_ = false;  // Waiting for playback to drain before starting listening (auto mode)
+    bool pending_listening_start_ = false;  // Waiting for playback to drain before starting listening
+    bool pending_wake_word_notification_ = false;
+    std::string pending_wake_word_;
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
 

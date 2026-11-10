@@ -8,11 +8,19 @@
 #include <freertos/task.h>
 
 #include "application.h"
+#include "sdkconfig.h"
+
+#if CONFIG_BREAD_COMPACT_WIFI_ILI9486_SD_TEST
+void RunCompactLcdSdTest();
+#endif
 
 #define TAG "main"
 
-extern "C" void app_main(void)
-{
+extern "C" void app_main(void) {
+#if CONFIG_BREAD_COMPACT_WIFI_ILI9486_SD_TEST
+    RunCompactLcdSdTest();
+    return;
+#endif
     // Initialize NVS flash for WiFi configuration
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {

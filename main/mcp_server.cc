@@ -110,7 +110,6 @@ void McpServer::AddCommonTools() {
             }),
             [camera](const PropertyList& properties) -> ReturnValue {
                 // Lower the priority to do the camera capture
-                TaskPriorityReset priority_reset(1);
 
                 if (!camera->Capture()) {
                     throw std::runtime_error("Failed to capture photo");
@@ -551,6 +550,9 @@ void McpServer::DoToolCall(int id, const std::string& tool_name, const cJSON* to
     auto& app = Application::GetInstance();
     app.Schedule([this, id, tool_iter, arguments = std::move(arguments)]() {
         try {
+            if (before_tool_call_) {
+                before_tool_call_((*tool_iter)->name());
+            }
             ReplyResult(id, (*tool_iter)->Call(arguments));
         } catch (const std::exception& e) {
             ESP_LOGE(TAG, "tools/call: %s", e.what());

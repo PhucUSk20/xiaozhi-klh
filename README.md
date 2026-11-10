@@ -1,3 +1,20 @@
+# XiaoZhi KLH
+
+Community firmware fork of [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32),
+maintained independently for KLH / KLeaderBit experiments on Bread Compact Wi-Fi
+(ESP32-S3). This is not an official upstream release.
+
+- Start here: [KLH setup, wiring and development guide](docs/klh-fork.md).
+- Development source: [`klh-dev`](https://github.com/PhucUSk20/xiaozhi-klh/tree/klh-dev).
+- `klh-stable` starts at the upstream baseline; KLH features are promoted only after
+  firmware and hardware validation. No validated KLH release is published yet.
+- Board features include robot web controls, K210 UART camera integration, SH1106
+  emoji UI, secondary SPI TFT / SD images and GIFs, selectable TFT pins, and
+  legacy or shared-clock microphone wiring.
+- Use ESP-IDF **v6.0.2**. Preserve the upstream [MIT license](LICENSE) and notices.
+
+The upstream documentation follows; KLH-specific behavior is documented above.
+
 # An MCP-based Chatbot
 
 (English | [中文](README_zh.md) | [日本語](README_ja.md))

@@ -2,6 +2,7 @@
 #include "assets.h"
 #include "assets/lang_config.h"
 #include "audio_codec.h"
+#include "audio/demuxer/ogg_demuxer.h"
 #include "board.h"
 #include "display.h"
 #include "mcp_server.h"
@@ -16,6 +17,7 @@
 #include <arpa/inet.h>
 #include <cJSON.h>
 #include <cstring>
+#include <new>
 
 #define TAG "Application"
 
@@ -74,7 +76,7 @@ void Application::Initialize() {
     callbacks.on_send_queue_available = [this]() {
         xEventGroupSetBits(event_group_, MAIN_EVENT_SEND_AUDIO);
     };
-    callbacks.on_wake_word_detected = [this](const std::string& wake_word) {
+    callbacks.on_wake_word_detected = [this](const std::string&) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_WAKE_WORD_DETECTED);
     };
     callbacks.on_vad_change = [this](bool speaking) {
@@ -202,8 +204,8 @@ void Application::Run() {
         }
 
         if (bits & MAIN_EVENT_PLAYBACK_DRAINED) {
-            // Deferred listening start (auto mode): the playback queue has
-            // drained, so it is now safe to enable voice processing.
+            // The playback queue has drained, so it is now safe to notify the
+            // server and enable voice processing without the popup being cut off.
             if (pending_listening_start_ && GetDeviceState() == kDeviceStateListening &&
                 audio_service_.IsPlaybackIdle()) {
                 pending_listening_start_ = false;
@@ -603,6 +605,7 @@ void Application::InitializeProtocol() {
             if (cJSON_IsString(emotion)) {
                 Schedule([display, emotion_str = std::string(emotion->valuestring)]() {
                     display->SetEmotion(emotion_str.c_str());
+                    Board::GetInstance().OnEmotionChanged(emotion_str.c_str());
                 });
             }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
@@ -702,6 +705,43 @@ void Application::ToggleChatState() { xEventGroupSetBits(event_group_, MAIN_EVEN
 void Application::StartListening() { xEventGroupSetBits(event_group_, MAIN_EVENT_START_LISTENING); }
 
 void Application::StopListening() { xEventGroupSetBits(event_group_, MAIN_EVENT_STOP_LISTENING); }
+
+bool Application::BeginBrowserVoiceInput() {
+    bool expected = false;
+    if (!browser_voice_active_.compare_exchange_strong(expected, true)) {
+        return true;
+    }
+    if (GetDeviceState() == kDeviceStateListening) {
+        Schedule([this]() { audio_service_.SuspendInput(); });
+        return true;
+    }
+    StartListening();
+    return true;
+}
+
+bool Application::PushBrowserVoicePcm(const int16_t* samples, size_t sample_count) {
+    if (!samples || sample_count != 16000 * OPUS_FRAME_DURATION_MS / 1000 ||
+        !IsBrowserVoiceReady()) {
+        return false;
+    }
+    std::vector<int16_t> frame(samples, samples + sample_count);
+    return audio_service_.QueueExternalPcm(std::move(frame));
+}
+
+void Application::EndBrowserVoiceInput() {
+    if (!browser_voice_active_.exchange(false)) {
+        return;
+    }
+    Schedule([this]() {
+        audio_service_.ResumeInput(true, false);
+        StopListening();
+    });
+}
+
+bool Application::IsBrowserVoiceReady() const {
+    return browser_voice_active_.load() && GetDeviceState() == kDeviceStateListening &&
+           protocol_ && protocol_->IsAudioChannelOpened();
+}
 
 void Application::HandleToggleChatEvent() {
     auto state = GetDeviceState();
@@ -809,33 +849,38 @@ void Application::HandleStopListeningEvent() {
 }
 
 void Application::HandleWakeWordDetectedEvent() {
+    const auto wake_word = audio_service_.GetLastWakeWord();
+    // Board activities may release audio ownership; do this on the application task,
+    // never from inside an audio-engine callback.
+    Board::GetInstance().OnWakeWordDetected(wake_word);
     if (!protocol_) {
         return;
     }
 
     auto state = GetDeviceState();
-    auto wake_word = audio_service_.GetLastWakeWord();
     ESP_LOGI(TAG, "Wake word detected: %s (state: %d)", wake_word.c_str(), (int)state);
 
     if (state == kDeviceStateIdle) {
         BeginWakeWordInvoke(wake_word);
-    } else if (state == kDeviceStateSpeaking || state == kDeviceStateListening) {
+    } else if (state == kDeviceStateSpeaking) {
         AbortSpeaking(kAbortReasonWakeWordDetected);
         // Clear send queue to avoid sending residues to server
         while (audio_service_.PopPacketFromSendQueue())
             ;
 
-        if (state == kDeviceStateListening) {
-            protocol_->SendStartListening(GetDefaultListeningMode());
-            audio_service_.ResetDecoder();
-            audio_service_.PlaySound(Lang::Sounds::OGG_POPUP);
-            // Re-enable wake word detection as it was stopped by the detection itself
-            audio_service_.EnableWakeWordDetection(true);
-        } else {
-            // Play popup sound and start listening again
-            play_popup_on_listening_ = true;
-            SetListeningMode(GetDefaultListeningMode());
-        }
+        // Play popup sound and start listening again
+        play_popup_on_listening_ = true;
+        SetListeningMode(GetDefaultListeningMode());
+    } else if (state == kDeviceStateListening) {
+        // A wake word while already in listening state is a fresh listening
+        // request, not an interruption of TTS. This path is especially
+        // important after an exclusive-input activity (such as the physical
+        // game), where voice processing may only just have been resumed.
+        while (audio_service_.PopPacketFromSendQueue())
+            ;
+        listening_mode_ = GetDefaultListeningMode();
+        play_popup_on_listening_ = true;
+        StartListeningAudio();
     } else if (state == kDeviceStateActivating) {
         // Restart the activation check if the wake word is detected during activation
         SetDeviceState(kDeviceStateIdle);
@@ -888,19 +933,13 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
 
     ESP_LOGI(TAG, "Wake word detected: %s", wake_word.c_str());
 #if CONFIG_SEND_WAKE_WORD_DATA
-    // Encode and send the wake word data to the server
-    while (auto packet = audio_service_.PopWakeWordPacket()) {
-        protocol_->SendAudio(std::move(packet));
-    }
-    // Set the chat state to wake word detected
-    protocol_->SendWakeWordDetected(wake_word);
-    SetListeningMode(GetDefaultListeningMode());
-#else
-    // Set flag to play popup sound after state changes to listening
-    // (PlaySound here would be cleared by ResetDecoder in EnableVoiceProcessing)
+    // Do not notify the server until the local acknowledgement has finished.
+    // Otherwise the server may start TTS and reset the decoder mid-popup.
+    pending_wake_word_notification_ = true;
+    pending_wake_word_ = wake_word;
+#endif
     play_popup_on_listening_ = true;
     SetListeningMode(GetDefaultListeningMode());
-#endif
 }
 
 void Application::HandleStateChangedEvent() {
@@ -909,6 +948,10 @@ void Application::HandleStateChangedEvent() {
     // Any state change invalidates a pending deferred listening start;
     // the Listening case below re-arms it when needed.
     pending_listening_start_ = false;
+    if (new_state != kDeviceStateListening) {
+        pending_wake_word_notification_ = false;
+        pending_wake_word_.clear();
+    }
 
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
@@ -923,6 +966,7 @@ void Application::HandleStateChangedEvent() {
             display->SetEmotion("neutral");  // Then set emotion (wechat mode checks child count)
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(true);
+            board.OnSessionIdle();
             break;
         case kDeviceStateConnecting:
             display->SetStatus(Lang::Strings::CONNECTING);
@@ -966,6 +1010,7 @@ void Application::HandleStateChangedEvent() {
             // Do nothing
             break;
     }
+    board.OnDeviceStateChanged(new_state);
 }
 
 void Application::StartListeningAudio() {
@@ -975,17 +1020,48 @@ void Application::StartListeningAudio() {
         return;
     }
 
-    // Send the start listening command
-    protocol_->SendStartListening(listening_mode_);
-    audio_service_.EnableVoiceProcessing(true);
-
-    ConfigureWakeWordForListening();
-
-    // Play popup sound after ResetDecoder (in EnableVoiceProcessing) has been called
     if (play_popup_on_listening_) {
         play_popup_on_listening_ = false;
+        pending_listening_start_ = true;
+
+        // Keep the microphone and wake-word engine out of the popup playback.
+        // Reset before queuing the popup; enabling voice processing later also
+        // resets the decoder, but only after playback has completely drained.
+        audio_service_.EnableVoiceProcessing(false);
+        audio_service_.EnableWakeWordDetection(false);
+        audio_service_.ResetDecoder();
         audio_service_.PlaySound(Lang::Sounds::OGG_POPUP);
+
+        // A malformed/empty asset would not generate a drained callback.
+        if (audio_service_.IsPlaybackIdle()) {
+            pending_listening_start_ = false;
+            StartListeningAudio();
+        }
+        return;
     }
+
+#if CONFIG_SEND_WAKE_WORD_DATA
+    if (pending_wake_word_notification_) {
+        // Send the encoded wake word only after the local popup has finished,
+        // so the server cannot begin TTS while it is still playing.
+        while (auto packet = audio_service_.PopWakeWordPacket()) {
+            protocol_->SendAudio(std::move(packet));
+        }
+        protocol_->SendWakeWordDetected(pending_wake_word_);
+        pending_wake_word_notification_ = false;
+        pending_wake_word_.clear();
+    }
+#endif
+
+    // Send the start listening command
+    protocol_->SendStartListening(listening_mode_);
+    if (browser_voice_active_.load()) {
+        audio_service_.SuspendInput();
+    } else {
+        audio_service_.EnableVoiceProcessing(true);
+    }
+
+    ConfigureWakeWordForListening();
 }
 
 void Application::ConfigureWakeWordForListening() {
@@ -1146,6 +1222,117 @@ void Application::SendMcpMessage(const std::string& payload) {
         }
         if (mcp_broadcast_callback_) {
             mcp_broadcast_callback_(payload);
+        }
+    });
+}
+
+void Application::SendAudioPrompt(const std::string_view& ogg, const std::string& label) {
+    if (ogg.empty()) {
+        ESP_LOGW(TAG, "Audio prompt '%s' is empty", label.c_str());
+        return;
+    }
+    if (audio_prompt_active_.exchange(true)) {
+        ESP_LOGW(TAG, "Audio prompt '%s' ignored because another prompt is active", label.c_str());
+        return;
+    }
+
+    const auto* data = reinterpret_cast<const uint8_t*>(ogg.data());
+    const size_t size = ogg.size();
+    Schedule([this, data, size, label]() {
+        const auto fail = [this, &label](const char* reason) {
+            ESP_LOGW(TAG, "Audio prompt '%s' failed: %s", label.c_str(), reason);
+            audio_prompt_active_ = false;
+        };
+
+        if (!protocol_) {
+            fail("protocol is unavailable");
+            return;
+        }
+
+        auto state = GetDeviceState();
+        if (!protocol_->IsAudioChannelOpened()) {
+            if (state != kDeviceStateIdle || !SetDeviceState(kDeviceStateConnecting)) {
+                fail("device is not idle");
+                return;
+            }
+            Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+            if (!protocol_->OpenAudioChannel()) {
+                SetDeviceState(kDeviceStateIdle);
+                fail("audio channel could not be opened");
+                return;
+            }
+            SetDeviceState(kDeviceStateIdle);
+        } else if (state != kDeviceStateIdle && state != kDeviceStateListening) {
+            fail("device is speaking or busy");
+            return;
+        }
+
+        // A regular user utterance must use listen/start + Opus + listen/stop.
+        // listen/detect is reserved for the actual wake-word text and Tenclass
+        // rejects arbitrary strings sent through that path.
+        listening_mode_ = kListeningModeManualStop;
+        protocol_->SendStartListening(kListeningModeManualStop);
+
+        struct AudioPromptJob {
+            Application* app;
+            const uint8_t* data;
+            size_t size;
+            std::string label;
+        };
+        auto* job = new (std::nothrow) AudioPromptJob{this, data, size, label};
+        if (job == nullptr) {
+            protocol_->SendStopListening();
+            fail("job allocation failed");
+            return;
+        }
+
+        ESP_LOGI(TAG, "Audio prompt '%s' streaming (%u bytes)", label.c_str(),
+                 static_cast<unsigned>(size));
+        const BaseType_t created = xTaskCreate(
+            [](void* arg) {
+                std::unique_ptr<AudioPromptJob> job(static_cast<AudioPromptJob*>(arg));
+                auto demuxer = std::make_unique<OggDemuxer>();
+                uint32_t timestamp = 0;
+                size_t packet_count = 0;
+                demuxer->OnDemuxerFinished(
+                    [&job, &timestamp, &packet_count](const uint8_t* packet_data,
+                                                      int sample_rate, size_t packet_size) {
+                        auto packet = std::make_shared<AudioStreamPacket>();
+                        packet->sample_rate = sample_rate;
+                        packet->frame_duration = 60;
+                        packet->timestamp = timestamp;
+                        packet->payload.assign(packet_data, packet_data + packet_size);
+                        job->app->Schedule([app = job->app, packet]() mutable {
+                            if (!app->protocol_ || !app->protocol_->IsAudioChannelOpened()) {
+                                return;
+                            }
+                            auto outgoing = std::make_unique<AudioStreamPacket>();
+                            *outgoing = std::move(*packet);
+                            if (!app->protocol_->SendAudio(std::move(outgoing))) {
+                                ESP_LOGW(TAG, "Failed to send an embedded audio prompt packet");
+                            }
+                        });
+                        ++packet_count;
+                        timestamp += 60;
+                        vTaskDelay(pdMS_TO_TICKS(60));
+                    });
+                demuxer->Process(job->data, job->size);
+
+                job->app->Schedule([app = job->app, label = job->label, packet_count]() {
+                    if (app->protocol_ && app->protocol_->IsAudioChannelOpened()) {
+                        app->protocol_->SendStopListening();
+                    }
+                    ESP_LOGI(TAG, "Audio prompt '%s' sent in %u Opus packets", label.c_str(),
+                             static_cast<unsigned>(packet_count));
+                    app->audio_prompt_active_ = false;
+                });
+                vTaskDelete(nullptr);
+            },
+            "audio_prompt", 6144, job, 3, nullptr);
+        if (created != pdPASS) {
+            delete job;
+            protocol_->SendStopListening();
+            fail("task creation failed");
         }
     });
 }

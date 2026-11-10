@@ -1,5 +1,6 @@
 # Define source files
-set(SOURCES "audio/audio_codec.cc"
+set(SOURCES "boards/common/hub_music_player.cc"
+            "audio/audio_codec.cc"
             "audio/audio_debugger.cc"
             "audio/audio_service.cc"
             "audio/demuxer/ogg_demuxer.cc"
@@ -92,8 +93,71 @@ set(EMOTE_RESOLUTION "320_240")
 # Set default assets if the board uses partition table V2
 if(CONFIG_BOARD_TYPE_BREAD_COMPACT_WIFI)
     set(BOARD_DIR "bread-compact-wifi")
+    if(CONFIG_BREAD_COMPACT_WIFI_TFT_128X160)
+        # Give manual menuconfig builds the same OTA identity as the release variant.
+        if(CONFIG_BREAD_COMPACT_WIFI_ILI9486_SD_TEST)
+            set(BOARD_NAME "bread-compact-wifi-ili9486-sd-test")
+        elseif(CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9341_320X240)
+            if(CONFIG_OLED_SH1106_128X64)
+                if(CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD)
+                    set(BOARD_NAME "bread-compact-wifi-sh1106-ili9341-320x240-sd")
+                else()
+                    set(BOARD_NAME "bread-compact-wifi-sh1106-ili9341-320x240")
+                endif()
+            else()
+                if(CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD)
+                    set(BOARD_NAME "bread-compact-wifi-ili9341-320x240-sd")
+                else()
+                    set(BOARD_NAME "bread-compact-wifi-ili9341-320x240")
+                endif()
+            endif()
+        elseif(CONFIG_BREAD_COMPACT_WIFI_TFT_ILI9486_480X320)
+            if(CONFIG_OLED_SH1106_128X64)
+                if(CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD)
+                    set(BOARD_NAME "bread-compact-wifi-sh1106-ili9486-480x320-sd")
+                else()
+                    set(BOARD_NAME "bread-compact-wifi-sh1106-ili9486-480x320")
+                endif()
+            else()
+                set(BOARD_NAME "bread-compact-wifi-ili9486-480x320")
+            endif()
+        elseif(CONFIG_BREAD_COMPACT_WIFI_TFT_ST7789_320X240)
+            if(CONFIG_OLED_SH1106_128X64)
+                if(CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD)
+                    set(BOARD_NAME "bread-compact-wifi-sh1106-st7789-320x240-sd")
+                else()
+                    set(BOARD_NAME "bread-compact-wifi-sh1106-st7789-320x240")
+                endif()
+            else()
+                set(BOARD_NAME "bread-compact-wifi-st7789-320x240")
+            endif()
+        elseif(CONFIG_OLED_SH1106_128X64)
+            if(CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD)
+                set(BOARD_NAME "bread-compact-wifi-sh1106-tft-sd")
+            else()
+                set(BOARD_NAME "bread-compact-wifi-sh1106-tft-160x128")
+            endif()
+        else()
+            set(BOARD_NAME "bread-compact-wifi-tft-128x160")
+        endif()
+        if(CONFIG_BREAD_COMPACT_WIFI_TFT_USE_CS38_RST40_DC41)
+            string(APPEND BOARD_NAME "-cs38")
+        endif()
+    endif()
+    # The board source glob also includes configurable_robot_control_server.c.
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_14_1)
     set(BUILTIN_ICON_FONT font_material_symbols_14_1)
+    list(APPEND BOARD_EMBED_FILES
+        "boards/bread-compact-wifi/game_start_prompt.ogg"
+        "boards/bread-compact-wifi/game_complete_prompt.ogg"
+    )
+    if(CONFIG_BREAD_COMPACT_WIFI_HUB_MUSIC_TEST)
+        list(APPEND BOARD_EMBED_FILES "boards/bread-compact-wifi/hub_music_test_prompt.ogg")
+    endif()
+    list(APPEND BOARD_EMBED_TXTFILES
+        "boards/bread-compact-wifi/robot_control.html"
+        "boards/bread-compact-wifi/robot_control_custom.html"
+    )
 elseif(CONFIG_BOARD_TYPE_BREAD_COMPACT_ML307)
     set(BOARD_DIR "bread-compact-ml307")
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_14_1)
@@ -865,7 +929,13 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION AND NOT BOARD_TYPE MATCHES "^[a-z0-9.-]+$")
     )
 endif()
 
-file(GLOB BOARD_SOURCES
+# ESP-IDF also reads this file in script mode to discover requirements.
+# CONFIGURE_DEPENDS is supported only during the normal configure pass.
+set(BOARD_SOURCE_GLOB_OPTIONS)
+if(NOT CMAKE_SCRIPT_MODE_FILE AND NOT CMAKE_BUILD_EARLY_EXPANSION)
+    set(BOARD_SOURCE_GLOB_OPTIONS CONFIGURE_DEPENDS)
+endif()
+file(GLOB BOARD_SOURCES ${BOARD_SOURCE_GLOB_OPTIONS}
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.c
 )
@@ -1042,17 +1112,19 @@ if(CONFIG_BOARD_TYPE_ESP_VOCAT AND IDF_VERSION_MAJOR LESS 6)
         espressif__touch_button_sensor
     )
 endif()
-if(CONFIG_BOARD_TYPE_ESP32_P4_FUNCTION_EV_BOARD)
+if(CONFIG_BOARD_TYPE_ESP32_P4_FUNCTION_EV_BOARD OR CONFIG_BREAD_COMPACT_WIFI_TFT_SDCARD)
     list(APPEND MAIN_PRIV_REQUIRES_EXTRA
         esp_driver_sdmmc
         sdmmc
     )
 endif()
 idf_component_register(SRCS ${SOURCES}
-                    EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
+                    EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS} ${BOARD_EMBED_FILES}
+                    EMBED_TXTFILES ${BOARD_EMBED_TXTFILES}
                     INCLUDE_DIRS ${INCLUDE_DIRS}
                     WHOLE_ARCHIVE
                     PRIV_REQUIRES
+                        esp_http_client
                         esp_pm
                         esp_psram
                         esp_netif

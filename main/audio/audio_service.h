@@ -125,6 +125,11 @@ public:
 
     void EnableWakeWordDetection(bool enable);
     void EnableVoiceProcessing(bool enable);
+    // Application-task-only: keep wake detection active while deferring voice uplink requests.
+    void SetWakeWordOnlyMode(bool enable);
+    void SuspendInput();
+    void ResumeInput(bool restore_wake_word, bool restore_voice_processing);
+    bool IsInputSuspended() const { return input_suspended_.load(); }
     void EnableAudioTesting(bool enable);
     void EnableDeviceAec(bool enable);
 
@@ -134,7 +139,10 @@ public:
     std::unique_ptr<AudioStreamPacket> PopPacketFromSendQueue();
     void PlaySound(const std::string_view& sound);
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
+    bool QueueExternalPcm(std::vector<int16_t>&& pcm);
     void ResetDecoder();
+    bool QueueMusicPcm(std::vector<int16_t>&& pcm);
+    void SetMusicPlaybackActive(bool active);
     void SetModelsList(srmodel_list_t* models_list);
 
 private:
@@ -189,6 +197,13 @@ private:
     bool device_aec_enabled_ = false;
 #endif
     std::atomic<bool> service_stopped_{true};
+    std::atomic<bool> music_playback_active_{false};
+    std::atomic<bool> input_suspended_{false};
+    std::atomic<bool> wake_word_only_{false};
+    std::atomic<bool> wake_only_requested_wake_{false};
+    std::atomic<bool> wake_only_requested_voice_{false};
+    std::atomic<bool> deferred_wake_word_enable_{false};
+    std::atomic<bool> deferred_voice_processing_enable_{false};
     std::atomic<bool> audio_input_need_warmup_{false};
 
     esp_timer_handle_t audio_power_timer_ = nullptr;

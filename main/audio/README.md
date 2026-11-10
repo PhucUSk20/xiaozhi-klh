@@ -5,6 +5,15 @@ and network queues independent from the chip-specific speech pipeline.
 
 ## Input engines
 
+`SetWakeWordOnlyMode()` is an application-task-owned mode for local activities
+such as Rock Paper Scissors. It leaves microphone capture and the configured wake
+detector running, suppresses voice output/VAD callbacks, and defers normal voice
+processing requests. Wake detection stays enabled during the activity even if the
+normal listening policy disables it. On exit the latest requested wake/voice states
+are applied. Existing full `SuspendInput()` / `ResumeInput()` remains independent
+and takes precedence. The board wake hook runs on the application task so it can
+release this mode before acknowledgement playback and normal listening resume.
+
 The old `AudioProcessor + WakeWord` combinations have been replaced by a single
 `AudioEngine` interface. `AudioInputTask` reads PCM once and feeds exactly one
 engine.

@@ -91,9 +91,15 @@ void AudioService::Initialize(AudioCodec* codec) {
     audio_engine_ = std::make_unique<LiteAudioEngine>();
 #endif
     audio_engine_->OnOutput([this](std::vector<int16_t>&& data) {
-        PushTaskToEncodeQueue(kAudioTaskTypeEncodeToSendQueue, std::move(data));
+        if (!wake_word_only_.load()) {
+            PushTaskToEncodeQueue(kAudioTaskTypeEncodeToSendQueue, std::move(data));
+        }
     });
     audio_engine_->OnVadStateChange([this](bool speaking) {
+        if (wake_word_only_.load()) {
+            voice_detected_ = false;
+            return;
+        }
         voice_detected_ = speaking;
         if (callbacks_.on_vad_change) {
             callbacks_.on_vad_change(speaking);
@@ -188,6 +194,10 @@ void AudioService::Stop() {
 }
 
 bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples) {
+    if (input_suspended_.load()) {
+        return false;
+    }
+
     if (!codec_->input_enabled()) {
         esp_timer_stop(audio_power_timer_);
         esp_timer_start_periodic(audio_power_timer_, AUDIO_POWER_CHECK_INTERVAL_MS * 1000);
@@ -577,7 +587,40 @@ void AudioService::PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t
     }
 }
 
+bool AudioService::QueueExternalPcm(std::vector<int16_t>&& pcm) {
+    if (service_stopped_.load() || opus_encoder_ == nullptr ||
+        pcm.size() != static_cast<size_t>(encoder_frame_size_)) {
+        return false;
+    }
+    PushTaskToEncodeQueue(kAudioTaskTypeEncodeToSendQueue, std::move(pcm));
+    return true;
+}
+
+void AudioService::SetMusicPlaybackActive(bool active) {
+    music_playback_active_ = active;
+    audio_queue_cv_.notify_all();
+}
+
+bool AudioService::QueueMusicPcm(std::vector<int16_t>&& pcm) {
+    if (pcm.empty() || pcm.size() > 8192) return false;
+    std::unique_lock<std::mutex> lock(audio_queue_mutex_);
+    if (!audio_queue_cv_.wait_for(lock, std::chrono::seconds(2), [this]() {
+            return service_stopped_.load() || !music_playback_active_.load() ||
+                audio_playback_queue_.size() < MAX_PLAYBACK_TASKS_IN_QUEUE;
+        }) || service_stopped_.load() || !music_playback_active_.load()) return false;
+    auto task = std::make_unique<AudioTask>();
+    task->type = kAudioTaskTypeDecodeToPlaybackQueue;
+    task->pcm = std::move(pcm);
+    playback_drained_notified_ = false;
+    audio_playback_queue_.push_back(std::move(task));
+    audio_queue_cv_.notify_all();
+    return true;
+}
+
 bool AudioService::PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait) {
+    // Music uses the existing bounded speaker queue; discard cloud TTS while
+    // music owns playback. Wake/manual listen releases ownership first.
+    if (music_playback_active_.load()) return true;
     std::unique_lock<std::mutex> lock(audio_queue_mutex_);
     if (audio_decode_queue_.size() >= MAX_DECODE_PACKETS_IN_QUEUE) {
         if (wait) {
@@ -630,6 +673,20 @@ std::unique_ptr<AudioStreamPacket> AudioService::PopWakeWordPacket() {
 
 void AudioService::EnableWakeWordDetection(bool enable) {
     ESP_LOGD(TAG, "%s wake word detection", enable ? "Enabling" : "Disabling");
+    if (wake_word_only_.load()) {
+        wake_only_requested_wake_ = enable;
+        // Full input suspension (browser voice, popup, etc.) still takes precedence.
+        if (!input_suspended_.load()) {
+            enable = true;
+        }
+    }
+    if (input_suspended_.load()) {
+        deferred_wake_word_enable_ = enable;
+        if (enable) {
+            ESP_LOGD(TAG, "Wake word enable deferred while audio input is suspended");
+            return;
+        }
+    }
     if (enable) {
         if (!InitializeAudioEngine() || !audio_engine_->HasWakeWord()) {
             xEventGroupClearBits(event_group_, AS_EVENT_WAKE_WORD_RUNNING);
@@ -653,6 +710,19 @@ void AudioService::EnableWakeWordDetection(bool enable) {
 
 void AudioService::EnableVoiceProcessing(bool enable) {
     ESP_LOGD(TAG, "%s voice processing", enable ? "Enabling" : "Disabling");
+    if (wake_word_only_.load()) {
+        wake_only_requested_voice_ = enable;
+        if (enable) {
+            return;
+        }
+    }
+    if (input_suspended_.load()) {
+        deferred_voice_processing_enable_ = enable;
+        if (enable) {
+            ESP_LOGD(TAG, "Voice processing enable deferred while audio input is suspended");
+            return;
+        }
+    }
 
     if (enable) {
         if (!InitializeAudioEngine()) {
@@ -674,6 +744,68 @@ void AudioService::EnableVoiceProcessing(bool enable) {
         }
         xEventGroupClearBits(event_group_, AS_EVENT_AUDIO_PROCESSOR_RUNNING);
     }
+}
+
+void AudioService::SetWakeWordOnlyMode(bool enable) {
+    if (enable) {
+        const bool was_wake_running = IsWakeWordRunning();
+        const bool was_voice_running = IsAudioProcessorRunning();
+        if (wake_word_only_.exchange(true)) {
+            return;
+        }
+        EnableVoiceProcessing(false);
+        voice_detected_ = false;
+        EnableWakeWordDetection(true);
+        // The calls above configure the game mode, not the state to restore.
+        wake_only_requested_wake_ = was_wake_running;
+        wake_only_requested_voice_ = was_voice_running;
+        ESP_LOGI(TAG, "Game audio: wake word %s, voice uplink paused",
+                 IsWakeWordRunning() ? "active" : "unavailable");
+    } else {
+        if (!wake_word_only_.exchange(false)) {
+            return;
+        }
+        const bool enable_wake = wake_only_requested_wake_.exchange(false);
+        const bool enable_voice = wake_only_requested_voice_.exchange(false);
+        EnableVoiceProcessing(enable_voice);
+        EnableWakeWordDetection(enable_wake);
+        ESP_LOGI(TAG, "Game audio released wake=%s voice=%s", enable_wake ? "on" : "off",
+                 enable_voice ? "on" : "off");
+    }
+}
+
+void AudioService::SuspendInput() {
+    if (input_suspended_.exchange(true)) {
+        return;
+    }
+
+    deferred_wake_word_enable_ = false;
+    deferred_voice_processing_enable_ = false;
+    EnableWakeWordDetection(false);
+    EnableVoiceProcessing(false);
+    xEventGroupSetBits(event_group_, AS_EVENT_AUDIO_INPUT_STOP_REQUEST);
+    ESP_LOGI(TAG, "Audio input suspended");
+}
+
+void AudioService::ResumeInput(bool restore_wake_word, bool restore_voice_processing) {
+    if (!input_suspended_.exchange(false)) {
+        return;
+    }
+
+    const bool enable_voice_processing =
+        restore_voice_processing || deferred_voice_processing_enable_.exchange(false);
+    const bool enable_wake_word =
+        restore_wake_word || deferred_wake_word_enable_.exchange(false);
+
+    if (enable_voice_processing) {
+        EnableVoiceProcessing(true);
+    }
+    if (enable_wake_word) {
+        EnableWakeWordDetection(true);
+    }
+    ESP_LOGI(TAG, "Audio input resumed wake=%s voice=%s",
+             enable_wake_word ? "on" : "off",
+             enable_voice_processing ? "on" : "off");
 }
 
 void AudioService::EnableAudioTesting(bool enable) {
