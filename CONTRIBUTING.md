@@ -4,6 +4,12 @@ Contributions target `klh-dev` in
 [PhucUSk20/xiaozhi-klh](https://github.com/PhucUSk20/xiaozhi-klh).
 This fork is maintained independently of `78/xiaozhi-esp32`.
 
+Team members can also contribute in the private
+[GitLab robotics/xiaozhi-klh](https://gitlab-new.bap.jp/robotics/xiaozhi-klh)
+project. Create a feature branch or fork there and open a merge request targeting
+`klh-dev`. GitLab requires group or project access. Public GitHub contributions
+continue to use pull requests as described below.
+
 1. Fork this repository and create a branch from `klh-dev`.
 2. Read [AGENTS.md](AGENTS.md), [the KLH guide](docs/klh-fork.md) and the closest
    existing implementation before making changes.

@@ -26,6 +26,21 @@ with preprocessing; this does not establish audio or display operation on hardwa
 
 ## Get the source
 
+For members of the private GitLab `robotics` group or project:
+
+```powershell
+git clone -b klh-dev https://gitlab-new.bap.jp/robotics/xiaozhi-klh.git
+cd xiaozhi-klh
+git switch -c feature/my-change
+```
+
+GitLab branch: [klh-dev](https://gitlab-new.bap.jp/robotics/xiaozhi-klh/-/tree/klh-dev).
+Create a merge request targeting `klh-dev` to contribute there. Team members
+with sufficient project permissions can push a feature branch to the project;
+others can use a fork if allowed by the GitLab instance.
+
+The public GitHub fork remains available:
+
 ```powershell
 git clone -b klh-dev https://github.com/PhucUSk20/xiaozhi-klh.git
 cd xiaozhi-klh
@@ -35,6 +50,12 @@ git switch -c feature/my-change
 For contributions, fork `PhucUSk20/xiaozhi-klh` into your own account first, clone
 your fork, and open a pull request targeting this project's `klh-dev` branch.
 You do not need write access to the upstream project.
+
+The maintainer checkout uses `origin` for GitHub, `gitlab` for the private team
+repository, and `upstream` for `78/xiaozhi-esp32`. Git does not synchronize these
+remotes automatically. Publish shared development changes explicitly to each
+intended destination. The initial GitLab snapshot matches the public GitHub
+source; future team-only changes should be pushed only to GitLab.
 
 ## SDK and build configuration
 
