@@ -6,7 +6,8 @@ maintained independently for KLH / KLeaderBit experiments on Bread Compact Wi-Fi
 
 - Start here: [KLH setup, wiring and development guide](docs/klh-fork.md).
 - GitLab team repository: [robotics/xiaozhi-klh](https://gitlab-new.bap.jp/robotics/xiaozhi-klh),
-  branch `klh-dev` (private; group or project membership required).
+  private; initial source publication is pending a Maintainer's first push.
+  Until then, clone the GitHub development branch below.
 - Development source: [`klh-dev`](https://github.com/PhucUSk20/xiaozhi-klh/tree/klh-dev).
 - `klh-stable` starts at the upstream baseline; KLH features are promoted only after
   firmware and hardware validation. No validated KLH release is published yet.

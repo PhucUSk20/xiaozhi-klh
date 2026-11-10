@@ -26,6 +26,13 @@ with preprocessing; this does not establish audio or display operation on hardwa
 
 ## Get the source
 
+GitLab publication is currently pending: the private project has been created,
+but GitLab rejected the initial push because the maintainer account `phucvt`
+has Developer access (30). A GitLab Maintainer must perform the initial push or
+grant the account sufficient project access. Until then the project is empty;
+use the public GitHub clone command below. The GitLab commands apply after the
+initial publication is completed.
+
 For members of the private GitLab `robotics` group or project:
 
 ```powershell
@@ -54,7 +61,7 @@ You do not need write access to the upstream project.
 The maintainer checkout uses `origin` for GitHub, `gitlab` for the private team
 repository, and `upstream` for `78/xiaozhi-esp32`. Git does not synchronize these
 remotes automatically. Publish shared development changes explicitly to each
-intended destination. The initial GitLab snapshot matches the public GitHub
+intended destination. The prepared GitLab snapshot uses the public GitHub
 source; future team-only changes should be pushed only to GitLab.
 
 ## SDK and build configuration
