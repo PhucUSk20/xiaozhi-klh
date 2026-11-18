@@ -9,24 +9,25 @@ The existing Kconfig symbol names and values are unchanged.
 
 ### Secondary TFT pin selection
 
-Inside this submenu, toggle **Use TFT pins CS38/RST40/DC41 (off:
-CS12/RST14/DC13)** (`CONFIG_BREAD_COMPACT_WIFI_TFT_USE_CS38_RST40_DC41`,
+Inside this submenu, toggle **Use alternate TFT wiring CS38/RST40/DC41**
+(`CONFIG_BREAD_COMPACT_WIFI_TFT_USE_CS38_RST40_DC41`,
 ESP32-S3 only, default off). This applies to every secondary TFT controller
 and the ILI9486 diagnostic.
 
-| Signal | Off (original wiring) | On (new wiring) |
-| --- | --- | --- |
-| CS | GPIO12 | GPIO38 |
-| RST | GPIO14 | GPIO40 |
-| DC | GPIO13 | GPIO41 |
-| MOSI | GPIO15 | GPIO15 |
-| SCK | GPIO2 | GPIO2 |
+| Signal | Off: ST7789 2 inch | Off: other panels | On: alternate wiring |
+| --- | --- | --- | --- |
+| CS | GPIO15 | GPIO12 | GPIO38 |
+| RST | GPIO2 | GPIO14 | GPIO40 |
+| DC | GPIO14 | GPIO13 | GPIO41 |
+| MOSI / SDA | GPIO12 | GPIO15 | GPIO15 |
+| SCK | GPIO13 | GPIO2 | GPIO2 |
 
 With the new TFT pins enabled, **Use legacy microphone pins
 (GPIO14/GPIO13/GPIO12)** becomes available in the main `Xiaozhi Assistant`
 menu. Keep it disabled when using the original TFT pins because they conflict.
 Connect the backlight separately.
-Existing variants retain the original wiring. The new ESP32-S3 release
+ST7789 variants use the corrected 2-inch wiring above. Other existing
+variants retain the original wiring. The ESP32-S3 release
 variant `bread-compact-wifi-sh1106-ili9341-320x240-sd-cs38` selects the new
 pins with SH1106, ILI9341 and SD support, retaining the existing flash and
 partition defaults. It uses the same single board factory. To build it:
@@ -391,9 +392,25 @@ the ESP-IDF ST7789 driver initializes RGB565 output. IPS color inversion default
 to enabled, matching Xiaozhi-Robot. For a module with inverted-looking colors,
 change `ST7789 display color inversion (usually enabled for IPS)`.
 
-Pins are unchanged: CS12, RST14, DC13, MOSI15, SCK2. Connect the module's power
-and backlight according to its specification; no backlight GPIO is assigned.
-Keep legacy microphone wiring disabled with the original TFT pins; the new
+The default 2-inch ST7789 wiring is:
+
+| ST7789 signal | ESP32-S3 GPIO |
+| --- | --- |
+| SCK / SCL | 13 |
+| MOSI / SDA | 12 |
+| RST / RES | 2 |
+| DC | 14 |
+| CS | 15 |
+
+Keep **Use alternate TFT wiring CS38/RST40/DC41** disabled for this module.
+This corrects the earlier shared pin map shown in boot logs as
+`SCK=2 MOSI=15 CS=12 DC=13 RST=14`. After rebuilding and flashing, verify
+`TFT SPI configured` reports `SCK=13 MOSI=12 CS=15 DC=14 RST=2`.
+The ST7735, ILI9341 and ILI9486 default wiring is unchanged; their pin tables
+elsewhere in this document do not apply to the default 2-inch ST7789 module.
+Connect the module's power and backlight according to its specification;
+no backlight GPIO is assigned. Keep legacy microphone wiring disabled;
+the alternate
 CS38/RST40/DC41 option permits legacy microphone wiring. Start SPI at 10 MHz.
 
 All existing `self.screen.*` tools use the selected panel after rebuilding and
@@ -489,7 +506,8 @@ Example build command for the user:
 python scripts/build.py bread-compact-wifi --name bread-compact-wifi-sh1106-ili9486-480x320-sd
 ```
 
-All TFT types use the pin table below: CS12, RST14, DC13, MOSI15, SCK2.
+ST7735, ILI9341 and ILI9486 use the pin table below: CS12, RST14, DC13,
+MOSI15, SCK2. ST7789 2 inch uses its dedicated pin table above.
 The SD card remains CLK10/CMD11/D0-16. Connect the backlight separately and keep
 legacy microphone wiring disabled when using the original TFT pins. Start SPI at the default 10 MHz. PNG and
 baseline JPEG files may be up to 480x480 pixels for ILI9486 (320x320 for ST7735/ST7789),

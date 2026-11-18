@@ -699,13 +699,15 @@ menuconfig BREAD_COMPACT_WIFI_TFT_128X160
 if BREAD_COMPACT_WIFI_TFT_128X160
 
 config BREAD_COMPACT_WIFI_TFT_USE_CS38_RST40_DC41
-    bool "Use TFT pins CS38/RST40/DC41 (off: CS12/RST14/DC13)"
+    bool "Use alternate TFT wiring CS38/RST40/DC41"
     depends on IDF_TARGET_ESP32S3
     default n
     help
         Enable for TFT wiring CS=GPIO38, RST=GPIO40, DC=GPIO41.
-        Disable to retain the original CS=GPIO12, RST=GPIO14, DC=GPIO13.
-        Both configurations use MOSI=GPIO15 and SCK=GPIO2.
+        This alternate wiring uses MOSI=GPIO15 and SCK=GPIO2.
+        When disabled, ST7789 2-inch uses SCK=GPIO13, MOSI=GPIO12,
+        RST=GPIO2, DC=GPIO14 and CS=GPIO15. Other panels retain
+        CS=GPIO12, RST=GPIO14, DC=GPIO13, MOSI=GPIO15 and SCK=GPIO2.
         For release builds, use a variant with a distinct board name.
 
 choice BREAD_COMPACT_WIFI_TFT_PANEL
@@ -720,7 +722,8 @@ config BREAD_COMPACT_WIFI_TFT_ST7789_320X240
     bool "ST7789 2 inch, 320x240 landscape"
     help
         Native 240x320 panel rotated to landscape, using the ESP-IDF ST7789 driver.
-        Same SPI pins as the 1.8 inch display; connect backlight separately.
+        Default wiring: SCK=GPIO13, MOSI/SDA=GPIO12, RST=GPIO2,
+        DC=GPIO14, CS=GPIO15. Connect backlight separately.
         Existing screen tools and SD GIF emoji use the selected resolution.
 
 config BREAD_COMPACT_WIFI_TFT_ILI9341_320X240
